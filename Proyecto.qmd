@@ -1,0 +1,212 @@
+---
+title: "Efecto de los microplásticos sobre la selección de concha en Pagurus bernhardus"
+author: "Carlos Fuentes"
+format: html
+editor: visual
+bibliography: references.bib
+toc: true
+lang: es
+code-fold: true
+self-contained: true
+---
+
+## Introducción
+
+Los microplásticos, definidos como partículas de plástico menores de 5 mm, se han convertido en uno de los contaminantes más extendidos y de mayor problemática en los ecosistemas marinos [@andrady2011; @cole2011; @yang2021a]. Su presencia ha sido documentada en prácticamente todos los ambientes oceánicos, desde zonas costeras hasta mar abierto y aguas profundas, lo que los ha convertido en una preocupación ambiental de alcance global [@yang2021a]. Debido a su pequeño tamaño, los microplásticos pueden ser ingeridos por una amplia variedad de especies marinas, incluyendo peces, moluscos, crustáceos y equinodermos, con potenciales efectos sobre su fisiología y comportamiento [@article; @yang2021a]
+
+El cangrejo ermitaño común europeo, *Pagurus bernhardus*, constituye un modelo adecuado para estudiar estos efectos debido a que su supervivencia depende en gran medida de la selección de conchas [@hazlett1981; @article]. Estos organismos habitan conchas vacías de gasterópodos para proteger su abdomen blando de los depredadores, y la calidad de la concha influye sobre su crecimiento, fecundidad y supervivencia [@WILLIAMS20041]. La elección de una nueva concha requiere reunir información sobre las alternativas disponibles, evaluar su calidad y decidir si realizar o no el cambio, lo que convierte este comportamiento en un proceso asociado a la cognición [@crump2020; @SHELTERPREFERENCESINTHEENDEMICBERMUDIANHERMITCRABCALCINUSVERRILLIRATHBUN1901DECAPODAANOMURA].
+
+En este trabajo se analizan los datos experimentales de @crump2020data, obtenidos a partir de individuos expuestos y no expuestos a microplásticos. El objetivo es evaluar si la exposición a microplásticos reduce la probabilidad de que un cangrejo ermitaño ocupe una concha óptima, considerando además el efecto del peso corporal. En base a lo anterior, se plantea como hipótesis que los individuos expuestos presentarán una menor probabilidad de entrar en la concha óptima que aquellos pertenecientes al grupo control.
+
+## Métodos
+
+### Origen de los datos
+
+Los datos utilizados en este estudio provienen del repositorio Dryad [@crump2020data] y fueron descargados el 23/09/2026. Estos corresponden al experimento desarrollado por @crump2020 para evaluar los efectos de la exposición a microplásticos sobre la selección de conchas en el cangrejo ermitaño común europeo (*Pagurus bernhardus*). El estudio incluyó 64 hembras recolectadas en Ballywalter Beach, Irlanda del Norte, las cuales fueron asignadas aleatoriamente a un tratamiento control o a un tratamiento con esferas de polietileno de 4 mm (25 partículas por litro). Los individuos permanecieron durante cinco días bajo estas condiciones y posteriormente fueron transferidos a una concha subóptima equivalente al 50 % de su preferencia de peso. Tras dos horas de aclimatación, se les ofreció una concha óptima y se registró durante 30 minutos si establecían contacto con ella, el tiempo requerido para hacerlo, el tiempo que la investigaban y si finalmente ingresaban en la nueva concha. Para este trabajo se utilizaron todas las observaciones disponibles en el archivo original, sin aplicar filtros ni excluir registros.
+
+```{r}
+library(readxl)
+
+datos <- read_excel("microplastics_impair_crustacean_cognition.xlsx", na = "na")
+```
+
+### Variables
+
+```{r}
+#| label: tbl-variables
+#| tbl-cap: "Variables utilizadas en el análisis."
+
+data.frame(
+  Variable = c("Tratamiento",
+               "Peso corporal",
+               "Contacto con la concha óptima",
+               "Entrada a la concha óptima",
+               "Tiempo hasta contactar la concha",
+               "Tiempo hasta entrar en la concha",
+               "Tiempo de investigación de la concha"),
+  Tipo = c("Categórica",
+           "Numérica",
+           "Categórica dicotómica",
+           "Categórica dicotómica",
+           "Numérica",
+           "Numérica",
+           "Numérica"),
+  `Unidad o categorías` = c("Control, Plástico",
+                            "Gramos",
+                            "0 = No contactó, 1 = Sí contactó",
+                            "0 = No entró, 1 = Sí entró",
+                            "Segundos",
+                            "Segundos",
+                            "Segundos"),
+  check.names = FALSE
+) |>
+  knitr::kable(align = "lll")
+```
+
+### Proceso de limpieza
+
+La @tbl-variables resume las variables utilizadas en el análisis. Los datos se importaron desde el archivo original mediante la función `read_excel()`, declarando `na` como valor faltante, y se conservaron siete de las nueve columnas, porque las dos restantes (peso de las conchas ofrecidas) se calculan a partir del peso corporal (En este caso no es un dato de interes para responder la hipotesis). Los tratamientos se colocarón como "Control" y "Plástico". Posteriormente, se verificó la presencia de datos faltantes y la relación entre las variables conductuales. En total fueron 64 individuos (35 ejemplares como grupo control y 29 ejemplares que fueron expuestos a plástico) y se comprobó que ningún individuo ingresó a la concha óptima sin haberla contactado previamente (@tbl-coherencia). Los tiempos de entrada a la concha tienen un limite de 1800 s (30 minutos), valor asignado a los individuos que no realizaron la conducta. Los 30 valores faltantes del tiempo de investigación corresponden a 29 individuos que no contactaron la concha y a un control que sí la contactó pero no tiene tiempo registrado.
+
+```{r}
+#| label: tbl-coherencia
+#| tbl-cap: "Relación entre el contacto y la entrada en la concha óptima."
+si_no <- c("No", "Sí")
+table(Contactó = factor(datos$contacted_shell, levels = c(0, 1), labels = si_no),
+      Entró = factor(datos$entered_shell, levels = c(0, 1), labels = si_no)) |>
+  as.data.frame(responseName = "Individuos") |>
+  knitr::kable()
+```
+
+```{r}
+#| label: paquetes
+#| message: false
+library(tidyverse)
+library(readxl)
+
+datos <- datos |>
+  rename(any_of(c(peso = "weight_g", contacto = "contacted_shell", entro = "entered_shell",
+                  lat_contacto = "contact_latency_s", lat_investigacion = "investigation_latency_s",
+                  lat_entrada = "entrance_latency_s"))) |>
+  select(tx, peso, contacto, entro, lat_contacto, lat_investigacion, lat_entrada) |>
+  mutate(tratamiento = factor(if_else(tx %in% c("ctrl", "Control"), "Control", "Plástico"),
+                              levels = c("Control", "Plástico")),
+         entrada = factor(entro, levels = c(0, 1), labels = c("No entró", "Entró")))
+
+prop <- datos |>
+  pivot_longer(cols = c(contacto, entro), names_to = "conducta", values_to = "valor") |>
+  mutate(conducta = if_else(conducta == "contacto", "Contactó la concha", "Entró en la concha")) |>
+  group_by(tratamiento, conducta) |>
+  summarise(n = n(), exito = sum(valor), proporcion = exito / n, .groups = "drop")
+
+lat <- datos |>
+  pivot_longer(cols = c(lat_contacto, lat_entrada), names_to = "evento", values_to = "segundos") |>
+  mutate(evento = if_else(evento == "lat_contacto", "Hasta contactar", "Hasta entrar"))
+```
+
+### Análisis estadístico
+
+Esta etapa es exploratoria, por lo que no se aplicaron pruebas de hipótesis y la hipótesis se abordó de forma descriptiva. Como la variable de interés (entrada en la concha) es dicotómica, se calcularon frecuencias y porcentajes por tratamiento, lo que permite comparar la probabilidad de entrar entre expuestos y control; lo mismo se hizo con el contacto. Las tiempos de entrada se resumieron con mediana y cuartiles (Q1–Q3) y se contó cuántos individuos llegaron al tope de 1800 s, porque ese límite hace que la media no sea representativa. El peso se resumió con media, desviación estándar, mediana y cuartiles para describir el tamaño de cada grupo. Las tablas se hicieron con `knitr::kable()` y las figuras con `ggplot2`.
+
+## Resultados
+
+```{r}
+#| label: preparacion
+datos <- datos |>
+  rename(any_of(c(peso = "weight_g", contacto = "contacted_shell", entro = "entered_shell",
+                  lat_contacto = "contact_latency_s", lat_investigacion = "investigation_latency_s",
+                  lat_entrada = "entrance_latency_s"))) |>
+  select(tx, peso, contacto, entro, lat_contacto, lat_investigacion, lat_entrada) |>
+  mutate(lat_investigacion = as.numeric(lat_investigacion),   # asegura que sea numérica
+         tratamiento = factor(if_else(tx %in% c("ctrl", "Control"), "Control", "Plástico"),
+                              levels = c("Control", "Plástico")),
+         entrada = factor(entro, levels = c(0, 1), labels = c("No entró", "Entró")))
+prop <- datos |>
+  pivot_longer(cols = c(contacto, entro), names_to = "conducta", values_to = "valor") |>
+  mutate(conducta = if_else(conducta == "contacto", "Contactó la concha", "Entró en la concha"),
+         conducta = factor(conducta, levels = c("Entró en la concha", "Contactó la concha"))) |>
+  group_by(tratamiento, conducta) |>
+  summarise(n = n(), exito = sum(valor), proporcion = exito / n, .groups = "drop")
+lat <- datos |>
+  pivot_longer(cols = c(lat_contacto, lat_entrada), names_to = "evento", values_to = "segundos") |>
+  mutate(evento = if_else(evento == "lat_contacto", "Hasta contactar", "Hasta entrar"))
+```
+
+```{r}
+#| label: tbl-resumen
+#| tbl-cap: "Individuos que contactaron y que entraron en la concha óptima, y peso corporal"
+datos |>
+  group_by(tratamiento) |>
+  summarise(n = n(),
+              Contactaron = sum(contacto),
+            `% contactaron` = 100 * mean(contacto),
+            Entraron = sum(entro),
+            `% entraron` = 100 * mean(entro),
+            `Peso medio (g)` = mean(peso),
+            `Desviación estándar del peso` = sd(peso)) |>
+  rename(Tratamiento = tratamiento) |>
+  knitr::kable(digits = 2)
+```
+
+En la @tbl-resumen y la @fig-prop se compara entre tratamientos la proporción de individuos que entraron en la concha óptima. La figura tiene dos paneles, uno para la entrada en la concha (izquierda) y otro para el contacto con ella (derecha), con una barra por tratamiento. Entraron en la concha 21 de 35 individuos control (60%) y 9 de 29 individuos expuestos al plástico (31%). Contactaron la concha 25 de 35 controles (71.4 %) y 10 de 29 expuestos (34.5 %); cuatro individuos control y uno expuesto la contactaron sin entrar en ella.
+
+```{r}
+#| label: fig-prop
+#| fig-cap: "Porcentaje de individuos que contactaron y entraron en la concha óptima."
+ggplot(prop, aes(x = tratamiento, y = proporcion, fill = tratamiento)) +
+  geom_col() +
+  facet_wrap(~ conducta) +
+  ylim(0, 1) +
+  labs(x = "Tratamiento",
+       y = "Proporción de individuos",
+       fill = "Tratamiento",
+       title = "Contacto y entrada en la concha óptima",
+       caption = "Fuente: Crump et al. (2020), Dryad.")
+```
+
+Para describir el tamaño de los individuos de cada grupo, la @fig-peso muestra el peso corporal en un diagrama de cajas. El peso medio fue de 0.21 g en el grupo control (DE = 0.10) y de 0.18 g en el grupo con plástico (DE = 0.08) (@tbl-resumen). La mediana fue de 0.19 g en el control (Q1–Q3: 0.125–0.255; rango: 0.07–0.44 g) y de 0.15 g con plástico (0.13–0.23; rango: 0.07–0.37 g). 
+
+```{r}
+#| label: fig-peso
+#| fig-cap: "Peso corporal de Pagurus bernhardus según tratamiento."
+ggplot(datos, aes(x = tratamiento, y = peso, fill = tratamiento)) +
+  geom_boxplot() +
+  labs(x = "Tratamiento",
+       y = "Peso corporal (g)",
+       fill = "Tratamiento",
+       title = "Peso corporal por tratamiento",
+       caption = "Fuente: Crump et al. (2020), Dryad.")
+```
+
+Por ultimo, la @fig-lat muestra el tiempo en segundos hasta contactar la concha óptima (hasta entrar en ella). Los individuos que no realizaron la conducta aparecen con el valor atipico. El tiempo hasta contactar tuvo una mediana de 948 s en el grupo control (Q1–Q3: 184–1800) y de 1800 s en el grupo con plástico (1356–1800); el tiempo hasta entrar tuvo una mediana de 1379 s en el control (511–1800) y de 1800 s con plástico (1559–1800). Asimismo, llegaron al tope en el contacto 10 de 35 controles y 19 de 29 con plástico, y en la entrada 14 de 35 y 20 de 29, respectivamente. Senvestigaron la concha 24 individuos control y 10 con plástico, con medianas de 129.5 s y 80.5 s.
+
+```{r}
+#| label: tbl-lat
+#| tbl-cap: "Tiempo de contacto y hasta entrar en la concha óptima."
+lat |>
+  group_by(tratamiento, evento) |>
+  summarise(Mediana = median(segundos),
+            Q1 = quantile(segundos, 0.25),
+            Q3 = quantile(segundos, 0.75),
+            `En el tope` = sum(segundos == 1800),
+            .groups = "drop") |>
+  rename(Tratamiento = tratamiento, Evento = evento) |>
+  knitr::kable(digits = 0)
+```
+
+```{r}
+#| label: fig-lat
+#| fig-cap: "Tiempo hasta contactar y hasta entrar en la concha óptima"
+ggplot(lat, aes(x = tratamiento, y = segundos, fill = tratamiento)) +
+  geom_boxplot() +
+  facet_wrap(~ evento) +
+  labs(x = "Tratamiento",
+       y = "Tiempo (s)",
+       fill = "Tratamiento",
+       title = "Tiempo hasta contactar y hasta entrar en la concha",
+       caption = "Fuente: Crump et al. (2020), Dryad.")
+```
+
+
+## Conclusión
+
+## Referencias
